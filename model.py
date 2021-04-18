@@ -32,6 +32,7 @@ assert tf.__version__.startswith('2')
 
 import PIL
 from PIL import Image
+import tensorflow as tf
 import matplotlib.pyplot as plt
 import tensorflow.keras.backend as K
 from tensorflow.keras import Input, Model
@@ -40,6 +41,9 @@ from tensorflow.keras.layers import UpSampling2D, Conv2D, Concatenate, Dense, co
 from tensorflow.keras.layers import Flatten, Lambda, Reshape, ZeroPadding2D, add
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+
+import argparse
 
 ############################################################
 # Conditioning Augmentation Network
@@ -533,7 +537,7 @@ class StackGanStage1(object):
 		stage1_generator_lr: Learning rate for stage 1 generator
 		stage1_discriminator_lr: Learning rate for stage 1 discriminator
 	"""
-	def __init__(self, epochs=500, z_dim=100, batch_size=64, enable_function=True, stage1_generator_lr=0.0002, stage1_discriminator_lr=0.0002):
+	def __init__(self, epochs=500, z_dim=100, batch_size=64, strategy=None, enable_function=True, stage1_generator_lr=0.0002, stage1_discriminator_lr=0.0002):
 		self.epochs = epochs
 		self.z_dim = z_dim
 		self.enable_function = enable_function
@@ -542,28 +546,29 @@ class StackGanStage1(object):
 		self.image_size = 64
 		self.conditioning_dim = 128
 		self.batch_size = batch_size
-		self.stage1_generator_optimizer = Adam(lr=stage1_generator_lr, beta_1=0.5, beta_2=0.999)
-		self.stage1_discriminator_optimizer = Adam(lr=stage1_discriminator_lr, beta_1=0.5, beta_2=0.999)
-		self.stage1_generator = build_stage1_generator()
-		self.stage1_generator.compile(loss='mse', optimizer=self.stage1_generator_optimizer)
-		#self.stage1_generator.load_weights('weights/stage1_gen.h5')
-		self.stage1_discriminator = build_stage1_discriminator()
-		self.stage1_discriminator.compile(loss='binary_crossentropy', optimizer=self.stage1_discriminator_optimizer)
-		#self.stage1_discriminator.load_weights('weights/stage1_disc.h5')
-		self.ca_network = build_ca_network()
-		self.ca_network.compile(loss='binary_crossentropy', optimizer='Adam')
-		#self.ca_network.load_weights('weights/stage1_ca.h5')
-		self.embedding_compressor = build_embedding_compressor()
-		self.embedding_compressor.compile(loss='binary_crossentropy', optimizer='Adam')
-		#self.embedding_compressor.load_weights('weights/stage1_embco.h5')
-		self.stage1_adversarial = build_adversarial(self.stage1_generator, self.stage1_discriminator)
-		self.stage1_adversarial.compile(loss=['binary_crossentropy', adversarial_loss], loss_weights=[1, 2.0], optimizer=self.stage1_generator_optimizer)
-		#self.stage1_adversarial.load_weights('weights/stage1_adv.h5')
-		self.checkpoint1 = tf.train.Checkpoint(
-        	generator_optimizer=self.stage1_generator_optimizer,
-        	discriminator_optimizer=self.stage1_discriminator_optimizer,
-        	generator=self.stage1_generator,
-        	discriminator=self.stage1_discriminator)
+		with strategy.scope():
+			self.stage1_generator_optimizer = Adam(lr=stage1_generator_lr, beta_1=0.5, beta_2=0.999)
+			self.stage1_discriminator_optimizer = Adam(lr=stage1_discriminator_lr, beta_1=0.5, beta_2=0.999)
+			self.stage1_generator = build_stage1_generator()
+			self.stage1_generator.compile(loss='mse', optimizer=self.stage1_generator_optimizer)
+			#self.stage1_generator.load_weights('weights/stage1_gen.h5')
+			self.stage1_discriminator = build_stage1_discriminator()
+			self.stage1_discriminator.compile(loss='binary_crossentropy', optimizer=self.stage1_discriminator_optimizer)
+			#self.stage1_discriminator.load_weights('weights/stage1_disc.h5')
+			self.ca_network = build_ca_network()
+			self.ca_network.compile(loss='binary_crossentropy', optimizer='Adam')
+			#self.ca_network.load_weights('weights/stage1_ca.h5')
+			self.embedding_compressor = build_embedding_compressor()
+			self.embedding_compressor.compile(loss='binary_crossentropy', optimizer='Adam')
+			#self.embedding_compressor.load_weights('weights/stage1_embco.h5')
+			self.stage1_adversarial = build_adversarial(self.stage1_generator, self.stage1_discriminator)
+			self.stage1_adversarial.compile(loss=['binary_crossentropy', adversarial_loss], loss_weights=[1, 2.0], optimizer=self.stage1_generator_optimizer)
+			#self.stage1_adversarial.load_weights('weights/stage1_adv.h5')
+			self.checkpoint1 = tf.train.Checkpoint(
+				generator_optimizer=self.stage1_generator_optimizer,
+				discriminator_optimizer=self.stage1_discriminator_optimizer,
+				generator=self.stage1_generator,
+				discriminator=self.stage1_discriminator)
 
 	def visualize_stage1(self):
 		"""Running Tensorboard visualizations.
@@ -607,6 +612,7 @@ class StackGanStage1(object):
 				image_batch = (image_batch - 127.5) / 127.5
 
 				gen_images, _ = self.stage1_generator.predict([embedding_text, latent_space])
+
 
 				discriminator_loss = self.stage1_discriminator.train_on_batch([image_batch, compressed_embedding], 
 					np.reshape(real, (self.batch_size, 1)))
@@ -660,7 +666,7 @@ class StackGanStage2(object):
 		stage2_generator_lr: Learning rate for stage 2 generator
 		stage2_discriminator_lr: Learning rate for stage 2 discriminator
 	"""
-	def __init__(self, epochs=500, z_dim=100, batch_size=64, enable_function=True, stage2_generator_lr=0.0002, stage2_discriminator_lr=0.0002):
+	def __init__(self, epochs=500, z_dim=100, batch_size=64, strategy=None, enable_function=True, stage2_generator_lr=0.0002, stage2_discriminator_lr=0.0002):
 		self.epochs = epochs
 		self.z_dim = z_dim
 		self.enable_function = enable_function
@@ -670,32 +676,33 @@ class StackGanStage2(object):
 		self.high_image_size = 256
 		self.conditioning_dim = 128
 		self.batch_size = batch_size
-		self.stage2_generator_optimizer = Adam(lr=stage2_generator_lr, beta_1=0.5, beta_2=0.999)
-		self.stage2_discriminator_optimizer = Adam(lr=stage2_discriminator_lr, beta_1=0.5, beta_2=0.999)
-		self.stage1_generator = build_stage1_generator()
-		self.stage1_generator.compile(loss='binary_crossentropy', optimizer=self.stage2_generator_optimizer)
-		self.stage1_generator.load_weights('weights/stage1_gen.h5')
-		self.stage2_generator = build_stage2_generator()
-		self.stage2_generator.compile(loss='binary_crossentropy', optimizer=self.stage2_generator_optimizer)
-		# self.stage2_generator.load_weights('weights/stage2_gen.h5')
-		self.stage2_discriminator = build_stage2_discriminator()
-		self.stage2_discriminator.compile(loss='binary_crossentropy', optimizer=self.stage2_discriminator_optimizer)
-		# self.stage2_discriminator.load_weights('weights/stage2_disc.h5')
-		self.ca_network = build_ca_network()
-		self.ca_network.compile(loss='binary_crossentropy', optimizer='Adam')
-		# self.ca_network.load_weights('weights/stage2_ca.h5')
-		self.embedding_compressor = build_embedding_compressor()
-		self.embedding_compressor.compile(loss='binary_crossentropy', optimizer='Adam')
-		# self.embedding_compressor.load_weights('weights/stage2_embco.h5')
-		self.stage2_adversarial = stage2_adversarial_network(self.stage2_discriminator, self.stage2_generator, self.stage1_generator)
-		self.stage2_adversarial.compile(loss=['binary_crossentropy', adversarial_loss], loss_weights=[1, 2.0], optimizer=self.stage2_generator_optimizer)	
-		# self.stage2_adversarial.load_weights('weights/stage2_adv.h5')
-		self.checkpoint2 = tf.train.Checkpoint(
-        	generator_optimizer=self.stage2_generator_optimizer,
-        	discriminator_optimizer=self.stage2_discriminator_optimizer,
-        	generator=self.stage2_generator,
-        	discriminator=self.stage2_discriminator,
-        	generator1=self.stage1_generator)
+		with strategy.scope():
+			self.stage2_generator_optimizer = Adam(lr=stage2_generator_lr, beta_1=0.5, beta_2=0.999)
+			self.stage2_discriminator_optimizer = Adam(lr=stage2_discriminator_lr, beta_1=0.5, beta_2=0.999)
+			self.stage1_generator = build_stage1_generator()
+			self.stage1_generator.compile(loss='binary_crossentropy', optimizer=self.stage2_generator_optimizer)
+			self.stage1_generator.load_weights('weights/stage1_gen.h5')
+			self.stage2_generator = build_stage2_generator()
+			self.stage2_generator.compile(loss='binary_crossentropy', optimizer=self.stage2_generator_optimizer)
+			# self.stage2_generator.load_weights('weights/stage2_gen.h5')
+			self.stage2_discriminator = build_stage2_discriminator()
+			self.stage2_discriminator.compile(loss='binary_crossentropy', optimizer=self.stage2_discriminator_optimizer)
+			# self.stage2_discriminator.load_weights('weights/stage2_disc.h5')
+			self.ca_network = build_ca_network()
+			self.ca_network.compile(loss='binary_crossentropy', optimizer='Adam')
+			# self.ca_network.load_weights('weights/stage2_ca.h5')
+			self.embedding_compressor = build_embedding_compressor()
+			self.embedding_compressor.compile(loss='binary_crossentropy', optimizer='Adam')
+			# self.embedding_compressor.load_weights('weights/stage2_embco.h5')
+			self.stage2_adversarial = stage2_adversarial_network(self.stage2_discriminator, self.stage2_generator, self.stage1_generator)
+			self.stage2_adversarial.compile(loss=['binary_crossentropy', adversarial_loss], loss_weights=[1, 2.0], optimizer=self.stage2_generator_optimizer)
+			# self.stage2_adversarial.load_weights('weights/stage2_adv.h5')
+			self.checkpoint2 = tf.train.Checkpoint(
+				generator_optimizer=self.stage2_generator_optimizer,
+				discriminator_optimizer=self.stage2_discriminator_optimizer,
+				generator=self.stage2_generator,
+				discriminator=self.stage2_discriminator,
+				generator1=self.stage1_generator)
 
 	def visualize_stage2(self):
 		"""Running Tensorboard visualizations.
@@ -798,8 +805,51 @@ if __name__ == '__main__':
 	class_id_path_test = test_dir + "/class_info.pickle"
 	dataset_path = "CUB_200_2011"
 
-	stage1 = StackGanStage1()
+	parser = argparse.ArgumentParser()
+	parser.add_argument("--epochs", type=int,
+						help="epochs to run for training", default=50)
+
+	parser.add_argument("--batch_size", type=int, required=False,
+						help="batch size per replica for training", default=64)
+
+	parser.add_argument("--gpu", type=int,
+						help="number of gpu devices to use", default=1)
+
+
+	parser.add_argument("--topology", type=str, choices=['ms', 'ar', 'b'],
+						help="topology name")
+
+	args = parser.parse_args()
+	epochs = args.epochs
+	gpu = args.gpu
+	batch_size = args.batch_size
+
+	max_num_gpu = len(tf.config.get_visible_devices("GPU"))
+
+	assert gpu <= max_num_gpu
+	gpu_list = ['/gpu:' + str(x) for x in range(gpu)]
+
+	strategy = tf.distribute.MirroredStrategy(gpu_list)
+	if args.topology == 'ar':
+		strategy = tf.distribute.NcclAllReduce()
+	elif args.topology == 'b':
+		strategy = tf.distribute.ReductionToOneDevice()
+
+	effective_batch_size = batch_size * gpu
+
+	start = time.time()
+
+	stage1 = StackGanStage1(epochs=epochs, batch_size=effective_batch_size, strategy=strategy)
 	stage1.train_stage1()
 
-	stage2 = StackGanStage2()
+	stage2 = StackGanStage2(epochs=epochs, batch_size=effective_batch_size, strategy=strategy)
 	stage2.train_stage2()
+
+	end = time.time()
+	train_time = end - start
+
+	with open("data_{}_g{}_{}.txt".format(args.topology, gpu, batch_size), "w") as file1:
+		file1.write("Strategy: {} \n".format(args.topology))
+		file1.write("#GPU : {} \n".format(gpu))
+		file1.write("Batch Size: {} \n".format(batch_size))
+		file1.write("Train Time: {} \n".format(train_time))
