@@ -19,6 +19,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import argparse
 import os
 import pickle
 import random
@@ -643,7 +644,9 @@ class StackGanStage1(object):
 					self.stage1_discriminator.save_weights("weights/stage1_disc.h5")
 					self.ca_network.save_weights('weights/stage1_ca.h5')
 					self.embedding_compressor.save_weights('weights/stage1_embco.h5')
-					self.stage1_adversarial.save_weights('weights/stage1_adv.h5')      
+					self.stage1_adversarial.save_weights('weights/stage1_adv.h5')
+			flush_to_file(1, "{},{}".format(epoch, gen_loss[-1]))
+			flush_to_file(2, "{},{}".format(epoch, dis_loss[-1]))
 
 		self.stage1_generator.save_weights('weights/stage1_gen.h5')
 		self.stage1_discriminator.save_weights("weights/stage1_disc.h5")
@@ -780,10 +783,16 @@ class StackGanStage2(object):
 					self.ca_network.save_weights('weights/stage2_ca.h5')
 					self.embedding_compressor.save_weights('weights/stage2_embco.h5')
 					self.stage2_adversarial.save_weights('weights/stage2_adv.h5')
-
+			flush_to_file(3, "{},{}".format(epoch, gen_loss[-1]))
+			flush_to_file(4, "{},{}".format(epoch, disc_loss[-1]))
 		self.stage2_generator.save_weights('weights/stage2_gen.h5')
 		self.stage2_discriminator.save_weights("weights/stage2_disc.h5")
 
+
+def flush_to_file(id, string):
+	with open("logs/log_{}.txt".format(id), "a+") as file1:
+		file1.writelines(string)
+		file1.write('\n')
 
 if __name__ == '__main__':
 
@@ -798,8 +807,30 @@ if __name__ == '__main__':
 	class_id_path_test = test_dir + "/class_info.pickle"
 	dataset_path = "CUB_200_2011"
 
-	stage1 = StackGanStage1()
+	parser = argparse.ArgumentParser()
+	parser.add_argument("--epochs", type=int,
+						help="epochs to run for training", default=50)
+
+	args = parser.parse_args()
+	epochs = args.epochs
+
+	flush_to_file(0, "Begin Time: " + str(time.time()))
+
+	start = time.time()
+	###
+	stage1 = StackGanStage1(epochs=epochs)
 	stage1.train_stage1()
 
-	stage2 = StackGanStage2()
+	stage2 = StackGanStage2(epochs=epochs)
 	stage2.train_stage2()
+	###
+	end = time.time()
+	flush_to_file(0, "End Time: " + str(time.time()))
+
+	train_time = end - start
+
+	flush_to_file(1, "bar")
+
+	with open("data_e{}.txt".format(epochs), "w") as file1:
+		file1.write("Train Time: {} \n".format(train_time))
+
