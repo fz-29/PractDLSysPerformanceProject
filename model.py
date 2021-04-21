@@ -885,8 +885,8 @@ if __name__ == '__main__':
                                                 help="number of gpu devices to use", default=1)
 
 
-        parser.add_argument("--topology", type=str, choices=['ms', 'ar', 'b'],
-                                                help="topology name")
+        parser.add_argument("--topology", type=str, choices=['ar', 'b'],
+                                                help="topology name : b for reduction to one device, default - nccl")
 
         args = parser.parse_args()
         epochs = args.epochs
@@ -920,6 +920,6 @@ if __name__ == '__main__':
 
         with open("data_{}_g{}_{}.txt".format(args.topology, gpu, batch_size), "w") as file1:
                 file1.write("Strategy: {} \n".format(args.topology))
-                file1.write("#GPU : {} \n".format(gpu))
+                file1.write("# GPU : {} \n".format(gpu))
                 file1.write("Batch Size: {} \n".format(batch_size))
                 file1.write("Train Time: {} \n".format(train_time))
