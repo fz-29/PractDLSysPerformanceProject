@@ -7,6 +7,14 @@ Submission By:
 1. Feroz Ahmad (fa2581)
 2. Li Cai (lc2928)
 
+# About the project
+
+Objective: 
+
+To analyze and compare training speed while training StackGAN on single and multiple GPUs (2, 4, 8) on a single node instance. We intend to
+study the percentage increase in speed up with increase in batch size, scaling efficiency and communication overhead with increase in GPU count.
+
+
 ## Steps:
 
 1. Requirements
@@ -30,6 +38,10 @@ Submission By:
 5. Untar above download
 
 `tar zxvf CUB_200_2011.tgz  > /dev/null 2>&1`
+
+6. Create logs folder
+
+`mkdir logs`
 
 7. Train
 

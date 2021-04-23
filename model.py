@@ -521,6 +521,11 @@ def save_image(file, save_path):
         ax.axis("off")
         plt.savefig(save_path)
 
+def flush_to_file(id, string):
+	with open("logs/log_{}.txt".format(id), "a+") as file1:
+		file1.writelines(string)
+		file1.write('\n')
+
 
 ############################################################
 # StackGAN class
@@ -681,7 +686,9 @@ class StackGanStage1(object):
                                         self.stage1_discriminator.save_weights("weights/stage1_disc.h5")
                                         self.ca_network.save_weights('weights/stage1_ca.h5')
                                         self.embedding_compressor.save_weights('weights/stage1_embco.h5')
-                                        self.stage1_adversarial.save_weights('weights/stage1_adv.h5')      
+                                        self.stage1_adversarial.save_weights('weights/stage1_adv.h5')
+                                flush_to_file(1, "{},{}".format(epoch, gen_loss[-1]))
+                                flush_to_file(2, "{},{}".format(epoch, dis_loss[-1]))
 
                 self.stage1_generator.save_weights('weights/stage1_gen.h5')
                 self.stage1_discriminator.save_weights("weights/stage1_disc.h5")
@@ -856,6 +863,8 @@ class StackGanStage2(object):
                                         self.ca_network.save_weights('weights/stage2_ca.h5')
                                         self.embedding_compressor.save_weights('weights/stage2_embco.h5')
                                         self.stage2_adversarial.save_weights('weights/stage2_adv.h5')
+                                flush_to_file(3, "{},{}".format(epoch, gen_loss[-1]))
+                                flush_to_file(4, "{},{}".format(epoch, disc_loss[-1]))
 
                 self.stage2_generator.save_weights('weights/stage2_gen.h5')
                 self.stage2_discriminator.save_weights("weights/stage2_disc.h5")
@@ -908,6 +917,7 @@ if __name__ == '__main__':
         effective_batch_size = batch_size * gpu
 
         start = time.time()
+        flush_to_file(0, "Begin Time: " + str(time.time()))
 
         stage1 = StackGanStage1(epochs=epochs, batch_size=effective_batch_size, strategy=strategy)
         stage1.train_stage1()
@@ -917,6 +927,8 @@ if __name__ == '__main__':
 
         end = time.time()
         train_time = end - start
+        flush_to_file(0, "End Time: " + str(end))
+        flush_to_file(0, "Train Time: " + str(train_time))
 
         with open("data_{}_g{}_{}.txt".format(args.topology, gpu, batch_size), "w") as file1:
                 file1.write("Strategy: {} \n".format(args.topology))
